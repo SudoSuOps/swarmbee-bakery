@@ -1,0 +1,82 @@
+"""HTTP client for the Swarm & Bee bakery JSON endpoints.
+
+Stateless. Reads BAKERY_BASE_URL from env (default: https://bakery.swarmandbee.ai).
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from typing import Any
+
+import requests
+
+
+DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
+USER_AGENT = "swarmbee-bakery-cli/0.1.0"
+DEFAULT_TIMEOUT = 10
+
+
+def base_url() -> str:
+    return os.environ.get("BAKERY_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+
+
+def _get(path: str) -> dict[str, Any]:
+    url = f"{base_url()}{path}"
+    r = requests.get(url,
+                     headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+                     timeout=DEFAULT_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def fetch_menu() -> dict[str, Any]:
+    """Returns the full bakery menu manifest."""
+    return _get("/menu.json")
+
+
+def fetch_sample_index() -> dict[str, Any]:
+    """Returns the sample-pack index."""
+    return _get("/samples/index.json")
+
+
+def fetch_sample(domain: str) -> dict[str, Any]:
+    """Returns a sample pack for one domain (finance|medical|healing|agents|legal)."""
+    return _get(f"/samples/{domain}.json")
+
+
+def menu_summary(menu: dict[str, Any]) -> dict[str, Any]:
+    """Compact summary of the menu — for terminal display."""
+    sk = menu.get("skus", {})
+    stock = sk.get("by_the_pound", {}).get("stock", [])
+    in_stock = [s for s in stock if s.get("status") == "in_stock"]
+    starter_kits = sk.get("the_500_pack", {}).get("starter_kits", [])
+    return {
+        "bakery": menu.get("bakery", {}).get("name", ""),
+        "doctrine": menu.get("bakery", {}).get("doctrine", ""),
+        "in_stock_corpora": [
+            {
+                "name": s.get("name"),
+                "domain": s.get("domain"),
+                "pairs": s.get("pairs"),
+                "last_rebake": s.get("freshness", {}).get("last_rebake"),
+                "sample": s.get("sample_endpoint"),
+            }
+            for s in in_stock
+        ],
+        "starter_kits": [
+            {
+                "name": k.get("name"),
+                "domain": k.get("domain"),
+                "description": k.get("description"),
+            }
+            for k in starter_kits
+        ],
+        "ordering_intake": menu.get("ordering", {}).get("intake_endpoint"),
+    }
+
+
+def sha256_payload(payload: dict[str, Any]) -> str:
+    """Deterministic sha256 of a JSON payload (sorted keys, compact separators)."""
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()

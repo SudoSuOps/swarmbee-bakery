@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swarmbee-bakery"
+version = "0.1.0"
+description = "CLI for the Swarm & Bee dataset bakery — order curated AI training corpora from the terminal."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "Swarm and Bee LLC", email = "build@swarmandbee.ai"}]
+keywords = ["AI", "dataset", "training data", "curation", "RAG", "LLM", "bakery", "CCIR", "Swarm and Bee"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[project.urls]
+Bakery = "https://bakery.swarmandbee.ai"
+Homepage = "https://swarmandbee.ai"
+Repository = "https://github.com/SudoSuOps/swarmbee-bakery"
+Bounty = "https://bounty.swarmandbee.ai"
+Identity = "https://identity.swarmandbee.ai"
+Defendable = "https://defendable.eth.limo"
+
+[project.scripts]
+swarmbee-bakery = "swarmbee_bakery.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["swarmbee_bakery*"]
