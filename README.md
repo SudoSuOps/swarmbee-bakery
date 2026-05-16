@@ -7,6 +7,9 @@ curated AI training corpora from the terminal.
 > is delivery. Fresh every day, with a shelf life. 500 fantastic muffins crush
 > 25,000 ingredients. *Less is better.*
 
+> **Compassionate intelligence** — organic datasets with real-world purpose.
+> Medical / autoimmune is the lead vertical. The diabetes corpus is the seed.
+
 ## What you can do
 
 ```bash
@@ -60,9 +63,12 @@ swarmbee-bakery order --sku by-the-pound \
   --name "Jane" --email "jane@acme.com"
 ```
 
-In stock: `sb-cre-verified` (810,097 finance/CRE pairs), `sb-medical-verified`
-(418,783 medical pairs). Aviation raw available on request post-audit. Legal,
-agents, healing in development.
+**Lead vertical: medical / autoimmune.** In stock:
+`sb-diabetes-24k` (24,000 pairs · diabetes lane · two-stream sourced + lived-experience-anchored · pre-Tribunal release),
+`sb-medical-verified` (418,783 medical pairs · grading in progress),
+`sb-cre-verified` (810,097 finance/CRE pairs · Atlas-class proof-of-process).
+Aviation raw available on request post-audit. Autoimmune expansion, legal,
+agents in development.
 
 ### The 500-Pack · signature blend
 
