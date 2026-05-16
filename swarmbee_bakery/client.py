@@ -13,7 +13,7 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
-USER_AGENT = "swarmbee-bakery-cli/0.1.1"
+USER_AGENT = "swarmbee-bakery-cli/0.1.2"
 DEFAULT_TIMEOUT = 10
 
 
@@ -43,6 +43,30 @@ def fetch_sample_index() -> dict[str, Any]:
 def fetch_sample(domain: str) -> dict[str, Any]:
     """Returns a sample pack for one domain (finance|medical|healing|agents|legal)."""
     return _get(f"/samples/{domain}.json")
+
+
+def fetch_free_index() -> dict[str, Any]:
+    """Returns the free-pack index — 10 medical sample packs, 50 cells each."""
+    return _get("/samples/free/index.json")
+
+
+def fetch_free_pack(slug: str) -> list[dict[str, Any]]:
+    """Returns one free pack as a list of cells (JSONL parsed line-by-line)."""
+    url = f"{base_url()}/samples/free/{slug}.jsonl"
+    r = requests.get(url,
+                     headers={"User-Agent": USER_AGENT, "Accept": "application/x-jsonl, text/plain"},
+                     timeout=DEFAULT_TIMEOUT)
+    r.raise_for_status()
+    cells: list[dict[str, Any]] = []
+    for line in r.text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            cells.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return cells
 
 
 def menu_summary(menu: dict[str, Any]) -> dict[str, Any]:

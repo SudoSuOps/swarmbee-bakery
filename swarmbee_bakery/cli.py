@@ -200,6 +200,101 @@ def cmd_order(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_free(args: argparse.Namespace) -> int:
+    """Browse, download, or bulk-fetch the 10 free medical sample packs."""
+    try:
+        index = client.fetch_free_index()
+    except Exception as e:
+        _err(f"could not fetch free-pack index: {e}")
+        return 2
+
+    packs = index.get("packs", [])
+
+    # --all : bulk download every pack
+    if args.all:
+        out_dir = Path(args.out_dir) if args.out_dir else Path("./swarm-samples")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        total_cells = 0
+        for p in packs:
+            slug = p.get("slug")
+            if not slug:
+                continue
+            try:
+                cells = client.fetch_free_pack(slug)
+            except Exception as e:
+                _err(f"failed to fetch {slug}: {e}")
+                continue
+            out_path = out_dir / f"{slug}.jsonl"
+            with open(out_path, "w") as f_out:
+                for c in cells:
+                    f_out.write(json.dumps(c, ensure_ascii=False) + "\n")
+            print(f"  ✓ {p.get('flavor'):30s}  {len(cells):>4} cells  →  {out_path}")
+            total_cells += len(cells)
+        manifest_path = out_dir / "index.json"
+        manifest_path.write_text(json.dumps(index, indent=2))
+        print(f"\n  index → {manifest_path}")
+        print(f"  total free cells: {total_cells}")
+        return 0
+
+    # No pack arg : list available
+    if not args.pack:
+        print(f"\n  {index.get('title', '10 free medical sample packs')}")
+        print(f"  {index.get('doctrine', '')}\n")
+        print("  ─── FREE PACKS ─────────────────────────────────────────────────")
+        rows = [{
+            "flavor": p.get("flavor", ""),
+            "tier": p.get("tier_grade", ""),
+            "slug": p.get("slug", ""),
+            "pairs": str(p.get("pairs", 0)),
+        } for p in packs]
+        _print_table(rows, [
+            ("FLAVOR", "flavor", 26),
+            ("TIER", "tier", 6),
+            ("SLUG", "slug", 22),
+            ("CELLS", "pairs", 8),
+        ])
+        print(f"\n  total: {index.get('total_free_cells', 0)} cells across {len(packs)} packs · {index.get('sample_size_per_pack', 50)} cells each\n")
+        print(f"  one pack    : swarmbee-bakery free <slug>")
+        print(f"  one pack -> : swarmbee-bakery free <slug> --out path.jsonl")
+        print(f"  all packs   : swarmbee-bakery free --all --out-dir ./samples/\n")
+        return 0
+
+    # Single-pack fetch
+    try:
+        cells = client.fetch_free_pack(args.pack)
+    except Exception as e:
+        _err(f"could not fetch free pack '{args.pack}': {e}")
+        return 2
+
+    if args.out:
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w") as f_out:
+            for c in cells:
+                f_out.write(json.dumps(c, ensure_ascii=False) + "\n")
+        print(f"wrote {len(cells)} cells to {out_path}")
+        return 0
+
+    if args.summary:
+        pack_meta = next((p for p in packs if p.get("slug") == args.pack), {})
+        print(f"\n  ─── {pack_meta.get('flavor', args.pack).upper()} ({len(cells)} cells) ───────")
+        print(f"  {pack_meta.get('note', '')}\n")
+        for c in cells[:10]:
+            q = (c.get("question") or "")[:90]
+            tier = c.get("tier", "—")
+            spec = c.get("specialty", "—")
+            print(f"  · [{tier:14s}] {spec:22s} {q}")
+        if len(cells) > 10:
+            print(f"  · ... and {len(cells) - 10} more")
+        print()
+        return 0
+
+    # Default: jsonl to stdout
+    for c in cells:
+        print(json.dumps(c, ensure_ascii=False))
+    return 0
+
+
 def cmd_receipt(args: argparse.Namespace) -> int:
     """Hash a JSON payload from stdin or file. Audit utility."""
     if args.file:
@@ -260,6 +355,14 @@ def build_parser() -> argparse.ArgumentParser:
     po.add_argument("--confirm", action="store_true",
                      help="actually POST. Without this flag, dry-run only.")
     po.set_defaults(fn=cmd_order)
+
+    pf = sub.add_parser("free", help="browse and download the 10 free medical sample packs")
+    pf.add_argument("pack", nargs="?", help="pack slug (e.g. dmack-royal-jelly); omit to list all")
+    pf.add_argument("--all", action="store_true", help="download every free pack")
+    pf.add_argument("--out", help="save single pack to this jsonl file (with pack arg)")
+    pf.add_argument("--out-dir", help="save all packs to this directory (with --all)")
+    pf.add_argument("--summary", action="store_true", help="print a compact summary of the pack")
+    pf.set_defaults(fn=cmd_free)
 
     pr = sub.add_parser("receipt", help="compute sha256 receipt of a JSON payload")
     pr.add_argument("--file", help="read from file (default: stdin)")
