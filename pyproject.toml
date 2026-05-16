@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "swarmbee-bakery"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI for the Swarm & Bee dataset bakery — order curated AI training corpora from the terminal."
 readme = "README.md"
 license = {text = "MIT"}

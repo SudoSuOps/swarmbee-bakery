@@ -60,15 +60,19 @@ def cmd_menu(args: argparse.Namespace) -> int:
     for s in in_stock:
         rows.append({
             "name": s.get("name", ""),
+            "tier": s.get("tier_grade", ""),
             "domain": s.get("domain", ""),
             "pairs": f"{s.get('pairs', 0):,}",
+            "seal": "sealed" if s.get("tribunal_sealed") else "pre",
             "rebake": s.get("freshness", {}).get("last_rebake", ""),
         })
     if rows:
         _print_table(rows, [
             ("NAME", "name", 26),
-            ("DOMAIN", "domain", 16),
-            ("PAIRS", "pairs", 12),
+            ("TIER", "tier", 6),
+            ("DOMAIN", "domain", 22),
+            ("PAIRS", "pairs", 10),
+            ("TRIBUNAL", "seal", 8),
             ("LAST RE-BAKE", "rebake", 12),
         ])
     else:
@@ -89,8 +93,29 @@ def cmd_menu(args: argparse.Namespace) -> int:
     for p, url in packs.items():
         print(f"  · {p:10s}  →  {base}{url}")
 
-    print(f"\n  ordering intake: {menu.get('ordering', {}).get('intake_endpoint', '')}")
-    print(f"  human form     : {menu.get('ordering', {}).get('human_form', '')}\n")
+    ordering = menu.get("ordering", {})
+    print("\n  ─── HOW TO ORDER ───────────────────────────────────────────────")
+    doctrine = ordering.get("channel_doctrine")
+    if doctrine:
+        print(f"  {doctrine}")
+    install = ordering.get("cli_install")
+    browse = ordering.get("cli_browse")
+    example = ordering.get("cli_order_example")
+    if install:
+        print(f"\n  install : {install}")
+    if browse:
+        print(f"  browse  : {browse}")
+    if example:
+        print(f"  order   : {example}")
+    intake = ordering.get("intake_endpoint")
+    if intake:
+        print(f"\n  intake endpoint : {intake}")
+    rails = ordering.get("settlement_rails")
+    if isinstance(rails, dict) and rails:
+        print("  settlement      :")
+        for k, v in rails.items():
+            print(f"      · {k}: {v}")
+    print()
     return 0
 
 
