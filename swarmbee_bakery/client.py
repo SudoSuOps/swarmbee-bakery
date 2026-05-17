@@ -13,7 +13,7 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
-USER_AGENT = "swarmbee-bakery-cli/0.1.3"
+USER_AGENT = "swarmbee-bakery-cli/0.1.4"
 DEFAULT_TIMEOUT = 10
 
 
@@ -76,6 +76,19 @@ def _post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 def lookup_order(order_id: str, email: str) -> tuple[int, dict[str, Any]]:
     """POST /api/account-lookup → order details + event history."""
     return _post("/api/account-lookup", {"order_id": order_id, "email": email})
+
+
+def fetch_cookbook_index() -> dict[str, Any]:
+    """Returns the cookbooks index — pre-curated recipe bundles."""
+    return _get("/cookbooks/index.json")
+
+
+def fetch_cookbook_markdown(slug: str) -> str:
+    """Returns the raw markdown content of a single cookbook."""
+    url = f"{base_url()}/cookbooks/{slug}.md"
+    r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=DEFAULT_TIMEOUT)
+    r.raise_for_status()
+    return r.text
 
 
 def list_orders(email: str) -> tuple[int, dict[str, Any]]:

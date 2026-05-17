@@ -169,6 +169,7 @@ def cmd_order(args: argparse.Namespace) -> int:
             deadline=args.deadline,
             company=args.company,
             notes=args.notes,
+            cookbook=getattr(args, "cookbook", None),
         )
     except ValueError as e:
         _err(str(e))
@@ -222,6 +223,74 @@ def cmd_order(args: argparse.Namespace) -> int:
     print(f"  response    : {json.dumps(body, indent=2)}")
     _err(f"submission rejected (status {status}). Check response above.")
     return 1
+
+
+def cmd_cookbook(args: argparse.Namespace) -> int:
+    """List all cookbooks or show one cookbook's full recipe."""
+    try:
+        idx = client.fetch_cookbook_index()
+    except Exception as e:
+        _err(f"could not fetch cookbook index: {e}")
+        return 2
+
+    cookbooks = idx.get("cookbooks", [])
+
+    # specific cookbook → render its markdown
+    if args.slug:
+        slug = args.slug
+        match = next((c for c in cookbooks if c.get("slug") == slug), None)
+        if not match:
+            _err(f"unknown cookbook '{slug}'. Available: {', '.join(c.get('slug','') for c in cookbooks)}")
+            return 2
+        if args.json:
+            print(json.dumps(match, indent=2))
+            return 0
+        try:
+            md = client.fetch_cookbook_markdown(slug)
+        except Exception as e:
+            _err(f"could not fetch markdown: {e}")
+            return 2
+        print(md)
+        print()
+        return 0
+
+    # list all
+    if args.json:
+        print(json.dumps(idx, indent=2))
+        return 0
+
+    print(f"\n  {idx.get('title', 'Swarm & Bee Cookbooks')}")
+    print(f"  {idx.get('doctrine', '')}\n")
+    hr = idx.get("headline_receipt", {})
+    if hr:
+        print(f"  HEADLINE RECEIPT: {hr.get('claim','')}")
+        print(f"  ↳ implication: {hr.get('implication','')}\n")
+
+    print("  ─── COOKBOOKS ──────────────────────────────────────────────────")
+    rows = [{
+        "name": c.get("name",""),
+        "slug": c.get("slug",""),
+        "cells": str(c.get("cells",0)),
+        "price": f"${c.get('price_usd',0)}",
+        "tier": c.get("tier",""),
+    } for c in cookbooks]
+    _print_table(rows, [
+        ("NAME", "name", 30),
+        ("SLUG", "slug", 30),
+        ("CELLS", "cells", 7),
+        ("PRICE", "price", 8),
+        ("TIER", "tier", 16),
+    ])
+    print(f"\n  shared recipe : {idx.get('shared_recipe',{}).get('label','—')}")
+    print(f"  shared eval   : {idx.get('shared_eval',{}).get('name','—')} ({idx.get('shared_eval',{}).get('n_probes',0)} probes)")
+    in_dev = idx.get("cookbooks_in_development") or idx.get("in_development") or []
+    if in_dev:
+        print(f"  in development: {len(in_dev)} more cookbooks scoped\n")
+    else:
+        print()
+    print("  detail   : swarmbee-bakery cookbook <slug>")
+    print("  order    : swarmbee-bakery order --sku cookbook --cookbook <slug> ...\n")
+    return 0
 
 
 def cmd_account(args: argparse.Namespace) -> int:
@@ -474,10 +543,11 @@ def build_parser() -> argparse.ArgumentParser:
     po = sub.add_parser("order", help="build and (with --confirm) submit an order")
     po.add_argument("--name", required=True)
     po.add_argument("--email", required=True)
-    po.add_argument("--sku", required=True, choices=["500-pack", "by-the-pound"])
+    po.add_argument("--sku", required=True, choices=["500-pack", "by-the-pound", "cookbook"])
     po.add_argument("--domain", required=True,
                      choices=["finance", "medical", "healing", "agents", "legal",
                               "GEO_audit", "geo_audit", "custom"])
+    po.add_argument("--cookbook", help="cookbook slug — required when --sku cookbook (run `cookbook` to list)")
     po.add_argument("--failure-mode", help="for 500-pack: the specific failure mode to repair")
     po.add_argument("--budget", help='e.g. "$2000 fixed" or "open"')
     po.add_argument("--deadline", help='e.g. "2026-06-15" or "no rush"')
@@ -494,6 +564,11 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--out-dir", help="save all packs to this directory (with --all)")
     pf.add_argument("--summary", action="store_true", help="print a compact summary of the pack")
     pf.set_defaults(fn=cmd_free)
+
+    pc = sub.add_parser("cookbook", help="browse curated recipe bundles (1500/3000 cells, named ingredients)")
+    pc.add_argument("slug", nargs="?", help="cookbook slug (e.g. glycemic-reasoning); omit to list all")
+    pc.add_argument("--json", action="store_true", help="print raw JSON")
+    pc.set_defaults(fn=cmd_cookbook)
 
     pa = sub.add_parser("account", help="look up one order by (order_id, email)")
     pa.add_argument("--order", required=True, help="order id, e.g. BAK-20260516-ABCD")

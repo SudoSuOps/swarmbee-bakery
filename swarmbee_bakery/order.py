@@ -18,7 +18,7 @@ import requests
 from .client import base_url, sha256_payload, USER_AGENT, DEFAULT_TIMEOUT
 
 
-VALID_SKUS = {"500-pack", "by-the-pound"}
+VALID_SKUS = {"500-pack", "by-the-pound", "cookbook"}
 VALID_DOMAINS = {
     "finance", "medical", "healing", "agents", "legal",
     "GEO_audit", "geo_audit", "custom",
@@ -34,12 +34,15 @@ def build_payload(*,
                    budget: str | None = None,
                    deadline: str | None = None,
                    company: str | None = None,
-                   notes: str | None = None) -> dict[str, Any]:
+                   notes: str | None = None,
+                   cookbook: str | None = None) -> dict[str, Any]:
     """Build the payload the bakery intake endpoint expects."""
     if sku not in VALID_SKUS:
         raise ValueError(f"invalid sku '{sku}'; must be one of {sorted(VALID_SKUS)}")
     if domain not in VALID_DOMAINS:
         raise ValueError(f"invalid domain '{domain}'; must be one of {sorted(VALID_DOMAINS)}")
+    if sku == "cookbook" and not cookbook:
+        raise ValueError("--cookbook <slug> required when --sku cookbook")
 
     work_type_map = {
         "finance": "ai_eval",
@@ -56,12 +59,14 @@ def build_payload(*,
         f"SKU: {sku}",
         f"Domain: {domain}",
     ]
+    if cookbook:
+        description_parts.append(f"Cookbook: {cookbook}")
     if failure_mode:
         description_parts.append(f"Failure mode: {failure_mode}")
     if notes:
         description_parts.append(f"Notes: {notes}")
     description_parts.append(
-        f"Submitted via swarmbee-bakery CLI v0.1.3 at "
+        f"Submitted via swarmbee-bakery CLI v0.1.4 at "
         f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
     description = "\n".join(description_parts)
