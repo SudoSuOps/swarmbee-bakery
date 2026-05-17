@@ -35,7 +35,8 @@ def build_payload(*,
                    deadline: str | None = None,
                    company: str | None = None,
                    notes: str | None = None,
-                   cookbook: str | None = None) -> dict[str, Any]:
+                   cookbook: str | None = None,
+                   settlement_rail: str | None = None) -> dict[str, Any]:
     """Build the payload the bakery intake endpoint expects."""
     if sku not in VALID_SKUS:
         raise ValueError(f"invalid sku '{sku}'; must be one of {sorted(VALID_SKUS)}")
@@ -61,12 +62,14 @@ def build_payload(*,
     ]
     if cookbook:
         description_parts.append(f"Cookbook: {cookbook}")
+    if settlement_rail and settlement_rail != "either":
+        description_parts.append(f"Settlement preference: {settlement_rail}")
     if failure_mode:
         description_parts.append(f"Failure mode: {failure_mode}")
     if notes:
         description_parts.append(f"Notes: {notes}")
     description_parts.append(
-        f"Submitted via swarmbee-bakery CLI v0.1.5 at "
+        f"Submitted via swarmbee-bakery CLI v0.1.6 at "
         f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
     description = "\n".join(description_parts)
@@ -83,6 +86,19 @@ def build_payload(*,
         payload["budget"] = budget
     if deadline:
         payload["deadline"] = deadline
+    # Pass settlement_rail as a structured field so backend stores it on the order row.
+    # Backend default is "either" if missing/null.
+    if settlement_rail and settlement_rail in ("stripe", "swarmusdc", "either"):
+        payload["settlement_rail"] = settlement_rail
+    # Pass sku/domain/cookbook as structured fields too so backend can index them
+    # (already in description, but backend prefers explicit fields when present).
+    payload["sku"] = sku
+    payload["domain"] = domain
+    if cookbook:
+        payload["cookbook"] = cookbook
+    if failure_mode:
+        payload["failure_mode"] = failure_mode
+    payload["channel"] = "cli"
 
     return payload
 

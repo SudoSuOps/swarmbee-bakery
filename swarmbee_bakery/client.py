@@ -13,7 +13,7 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
-USER_AGENT = "swarmbee-bakery-cli/0.1.5"
+USER_AGENT = "swarmbee-bakery-cli/0.1.6"
 DEFAULT_TIMEOUT = 10
 
 
@@ -91,18 +91,28 @@ def fetch_cookbook_markdown(slug: str) -> str:
     return r.text
 
 
-def list_orders(email: str) -> tuple[int, dict[str, Any]]:
-    """POST /api/orders-list → brief list of orders for this email."""
-    return _post("/api/orders-list", {"email": email})
+def list_orders(email: str, proof_order_id: str) -> tuple[int, dict[str, Any]]:
+    """POST /api/orders-list → brief list of orders for this email.
+    Requires proof_order_id (any past order_id for this email) to prevent
+    email enumeration attacks against the customer database."""
+    return _post("/api/orders-list", {"email": email, "proof_order_id": proof_order_id})
 
 
 def fetch_free_pack(slug: str) -> list[dict[str, Any]]:
-    """Returns one free pack as a list of cells (JSONL parsed line-by-line)."""
+    """Returns one free pack as a list of cells (JSONL parsed line-by-line).
+    Validates response is actually JSONL — refuses to parse HTML 200 SPA-fallback
+    responses as garbage cells (would happen on bad slugs against CF Pages)."""
     url = f"{base_url()}/samples/free/{slug}.jsonl"
     r = requests.get(url,
-                     headers={"User-Agent": USER_AGENT, "Accept": "application/x-jsonl, text/plain"},
+                     headers={"User-Agent": USER_AGENT, "Accept": "application/x-ndjson, application/x-jsonl, text/plain"},
                      timeout=DEFAULT_TIMEOUT)
     r.raise_for_status()
+    ct = (r.headers.get("Content-Type") or "").lower()
+    if "html" in ct:
+        raise ValueError(
+            f"server returned HTML for /samples/free/{slug}.jsonl (likely 404 SPA-fallback). "
+            "Check the slug exists in `swarmbee-bakery free` listing."
+        )
     cells: list[dict[str, Any]] = []
     for line in r.text.splitlines():
         line = line.strip()

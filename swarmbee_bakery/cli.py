@@ -157,7 +157,14 @@ def cmd_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+_EMAIL_RX = __import__("re").compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
 def cmd_order(args: argparse.Namespace) -> int:
+    # Validate email before doing anything else — fail-fast, no payload print on bad input
+    if not _EMAIL_RX.match(args.email or ""):
+        _err(f"invalid email address: {args.email!r}")
+        return 2
     try:
         payload = order.build_payload(
             name=args.name,
@@ -170,6 +177,7 @@ def cmd_order(args: argparse.Namespace) -> int:
             company=args.company,
             notes=args.notes,
             cookbook=getattr(args, "cookbook", None),
+            settlement_rail=getattr(args, "settlement", None),
         )
     except ValueError as e:
         _err(str(e))
@@ -363,8 +371,9 @@ def cmd_account(args: argparse.Namespace) -> int:
 
 
 def cmd_orders(args: argparse.Namespace) -> int:
-    """List all orders for an email — brief shape."""
-    status, body = client.list_orders(args.email)
+    """List all orders for an email — brief shape.
+    Requires a known order_id as proof to prevent email enumeration."""
+    status, body = client.list_orders(args.email, args.proof_order)
     if args.json:
         print(json.dumps(body, indent=2))
         return 0 if (200 <= status < 300) else 1
@@ -459,7 +468,12 @@ def cmd_free(args: argparse.Namespace) -> int:
         print(f"  all packs   : swarmbee-bakery free --all --out-dir ./samples/\n")
         return 0
 
-    # Single-pack fetch
+    # Single-pack fetch — validate slug against index first to avoid silently
+    # parsing an HTML 404 fallback as garbage JSONL
+    valid_slugs = {p.get("slug") for p in packs if p.get("slug")}
+    if args.pack not in valid_slugs:
+        _err(f"unknown free pack '{args.pack}'. Available: {', '.join(sorted(s for s in valid_slugs if s))}")
+        return 2
     try:
         cells = client.fetch_free_pack(args.pack)
     except Exception as e:
@@ -548,6 +562,8 @@ def build_parser() -> argparse.ArgumentParser:
                      choices=["finance", "medical", "healing", "agents", "legal",
                               "GEO_audit", "geo_audit", "custom"])
     po.add_argument("--cookbook", help="cookbook slug — required when --sku cookbook (run `cookbook` to list)")
+    po.add_argument("--settlement", choices=["stripe", "swarmusdc", "either"], default="either",
+                     help="preferred settlement rail (default: either — human follows up with both options)")
     po.add_argument("--failure-mode", help="for 500-pack: the specific failure mode to repair")
     po.add_argument("--budget", help='e.g. "$2000 fixed" or "open"')
     po.add_argument("--deadline", help='e.g. "2026-06-15" or "no rush"')
@@ -576,8 +592,10 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--json", action="store_true", help="print raw JSON response")
     pa.set_defaults(fn=cmd_account)
 
-    plo = sub.add_parser("orders", help="list all orders for an email")
+    plo = sub.add_parser("orders", help="list all orders for an email (requires proof_order_id)")
     plo.add_argument("--email", required=True, help="customer email")
+    plo.add_argument("--proof-order", required=True,
+                     help="any past order_id for this email (anti-enumeration; e.g. BAK-20260517-AQA7)")
     plo.add_argument("--json", action="store_true", help="print raw JSON response")
     plo.set_defaults(fn=cmd_orders)
 
