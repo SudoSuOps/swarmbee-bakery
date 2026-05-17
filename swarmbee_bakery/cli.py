@@ -191,13 +191,144 @@ def cmd_order(args: argparse.Namespace) -> int:
     status, body, endpoint = order.submit_with_fallback(payload)
     print(f"  endpoint    : {client.base_url()}{endpoint}")
     print(f"  http_status : {status}")
-    print(f"  response    : {json.dumps(body, indent=2)}")
 
     if 200 <= status < 300 and body.get("ok"):
-        print("\n  ORDER SUBMITTED. A human reads every submission. Reply within one business day.")
+        oid = body.get("order_id")
+        if oid:
+            # New D1-backed response shape — pretty print
+            print(f"\n  ─── ORDER PERSISTED ────────────────────────────────────────────")
+            print(f"  order_id          : {oid}")
+            print(f"  status            : {body.get('status', 'pending')}")
+            print(f"  payload_sha256    : {body.get('payload_sha256', '—')}")
+            email_st = body.get("receipt_email", {})
+            if isinstance(email_st, dict):
+                if email_st.get("sent"):
+                    print(f"  email receipt     : ✓ sent to {args.email}")
+                else:
+                    print(f"  email receipt     : ✗ failed ({email_st.get('error', 'unknown')})")
+            next_step = body.get("next_step")
+            if next_step:
+                print(f"\n  {next_step}")
+            check = body.get("check_status")
+            if check:
+                print(f"\n  check status anytime:")
+                print(f"    {check}")
+            print()
+        else:
+            # Legacy response (no D1 yet) — just confirm
+            print("\n  ORDER SUBMITTED. A human reads every submission. Reply within one business day.")
+            print(f"  response: {json.dumps(body, indent=2)}")
         return 0
+    print(f"  response    : {json.dumps(body, indent=2)}")
     _err(f"submission rejected (status {status}). Check response above.")
     return 1
+
+
+def cmd_account(args: argparse.Namespace) -> int:
+    """Look up one order by (order_id, email) — durable D1 lookup, no auth."""
+    status, body = client.lookup_order(args.order, args.email)
+    if args.json:
+        print(json.dumps(body, indent=2))
+        return 0 if (200 <= status < 300) else 1
+    if status == 404:
+        _err("order not found (or email does not match)")
+        return 1
+    if not (200 <= status < 300) or not body.get("ok"):
+        _err(f"lookup failed (status {status}): {body.get('error', 'unknown')}")
+        return 1
+
+    o = body.get("order", {})
+    events = body.get("events", [])
+
+    def fld(label: str, value):
+        if value not in (None, "", 0):
+            print(f"  {label:24s} {value}")
+
+    print(f"\n  ─── ORDER {o.get('order_id', '?')} ─────────────────────────────────")
+    fld("status", o.get("status"))
+    fld("status_updated_at", o.get("status_updated_at"))
+    fld("created_at", o.get("created_at"))
+    print()
+    fld("channel", o.get("channel"))
+    fld("sku", o.get("sku"))
+    fld("sku_id", o.get("sku_id"))
+    fld("domain", o.get("domain"))
+    fld("pairs_requested", o.get("pairs_requested"))
+    fld("failure_mode", o.get("failure_mode"))
+    fld("settlement_rail", o.get("settlement_rail"))
+    fld("name", o.get("name"))
+    fld("company", o.get("company"))
+    fld("notes", o.get("notes"))
+    print()
+    print("  ─── PAYMENT ──────────────────────────────────────────────────")
+    fld("invoice_url", o.get("invoice_url"))
+    fld("invoice_amount_usd", o.get("invoice_amount_usd"))
+    fld("paid_at", o.get("paid_at"))
+    print()
+    print("  ─── FULFILLMENT ──────────────────────────────────────────────")
+    fld("assembled_at", o.get("assembled_at"))
+    fld("shipped_at", o.get("shipped_at"))
+    fld("bundle_sha256", o.get("bundle_sha256"))
+    fld("download_url", o.get("download_url"))
+    fld("download_expires_at", o.get("download_expires_at"))
+    fld("hedera_anchor_tx", o.get("hedera_anchor_tx"))
+    print()
+    print("  ─── PROVENANCE ───────────────────────────────────────────────")
+    fld("payload_sha256", o.get("payload_sha256"))
+    print()
+    if events:
+        print(f"  ─── EVENT LOG ({len(events)}) ─────────────────────────────────────")
+        for e in events:
+            ts = e.get("created_at", "")[:19]
+            etype = e.get("event_type", "")
+            actor = e.get("actor", "")
+            transition = ""
+            if e.get("to_status"):
+                transition = f" {e.get('from_status') or '∅'} → {e.get('to_status')}"
+            detail = e.get("detail") or ""
+            print(f"  · {ts}  [{etype:14s}] actor={actor:12s}{transition}")
+            if detail:
+                print(f"      {detail[:120]}")
+        print()
+    return 0
+
+
+def cmd_orders(args: argparse.Namespace) -> int:
+    """List all orders for an email — brief shape."""
+    status, body = client.list_orders(args.email)
+    if args.json:
+        print(json.dumps(body, indent=2))
+        return 0 if (200 <= status < 300) else 1
+    if not (200 <= status < 300) or not body.get("ok"):
+        _err(f"list failed (status {status}): {body.get('error', 'unknown')}")
+        return 1
+
+    orders = body.get("orders", [])
+    print(f"\n  ─── ORDERS FOR {body.get('email', args.email)} ({len(orders)}) ───────")
+    if not orders:
+        print("  (no orders found)")
+        print()
+        return 0
+    rows = [{
+        "order_id": o.get("order_id", ""),
+        "created": (o.get("created_at") or "")[:10],
+        "status": o.get("status", ""),
+        "channel": o.get("channel", ""),
+        "sku": o.get("sku") or "—",
+        "domain": o.get("domain") or "—",
+        "rail": o.get("settlement_rail") or "—",
+    } for o in orders]
+    _print_table(rows, [
+        ("ORDER ID", "order_id", 22),
+        ("CREATED", "created", 11),
+        ("STATUS", "status", 12),
+        ("CHANNEL", "channel", 10),
+        ("SKU", "sku", 14),
+        ("DOMAIN", "domain", 22),
+        ("RAIL", "rail", 10),
+    ])
+    print(f"\n  detail: swarmbee-bakery account --order <ID> --email {body.get('email', args.email)}\n")
+    return 0
 
 
 def cmd_free(args: argparse.Namespace) -> int:
@@ -363,6 +494,17 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--out-dir", help="save all packs to this directory (with --all)")
     pf.add_argument("--summary", action="store_true", help="print a compact summary of the pack")
     pf.set_defaults(fn=cmd_free)
+
+    pa = sub.add_parser("account", help="look up one order by (order_id, email)")
+    pa.add_argument("--order", required=True, help="order id, e.g. BAK-20260516-ABCD")
+    pa.add_argument("--email", required=True, help="email used at order time")
+    pa.add_argument("--json", action="store_true", help="print raw JSON response")
+    pa.set_defaults(fn=cmd_account)
+
+    plo = sub.add_parser("orders", help="list all orders for an email")
+    plo.add_argument("--email", required=True, help="customer email")
+    plo.add_argument("--json", action="store_true", help="print raw JSON response")
+    plo.set_defaults(fn=cmd_orders)
 
     pr = sub.add_parser("receipt", help="compute sha256 receipt of a JSON payload")
     pr.add_argument("--file", help="read from file (default: stdin)")

@@ -13,7 +13,7 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
-USER_AGENT = "swarmbee-bakery-cli/0.1.2"
+USER_AGENT = "swarmbee-bakery-cli/0.1.3"
 DEFAULT_TIMEOUT = 10
 
 
@@ -48,6 +48,39 @@ def fetch_sample(domain: str) -> dict[str, Any]:
 def fetch_free_index() -> dict[str, Any]:
     """Returns the free-pack index — 10 medical sample packs, 50 cells each."""
     return _get("/samples/free/index.json")
+
+
+def _post(path: str, payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """POST helper. Returns (status, body). Never raises on HTTP error."""
+    url = f"{base_url()}{path}"
+    try:
+        r = requests.post(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json=payload,
+            timeout=DEFAULT_TIMEOUT,
+        )
+    except requests.RequestException as e:
+        return 0, {"ok": False, "error": "network_error", "detail": str(e)}
+    try:
+        body = r.json()
+    except Exception:
+        body = {"ok": False, "error": "non_json_response", "body_preview": r.text[:500]}
+    return r.status_code, body
+
+
+def lookup_order(order_id: str, email: str) -> tuple[int, dict[str, Any]]:
+    """POST /api/account-lookup → order details + event history."""
+    return _post("/api/account-lookup", {"order_id": order_id, "email": email})
+
+
+def list_orders(email: str) -> tuple[int, dict[str, Any]]:
+    """POST /api/orders-list → brief list of orders for this email."""
+    return _post("/api/orders-list", {"email": email})
 
 
 def fetch_free_pack(slug: str) -> list[dict[str, Any]]:
