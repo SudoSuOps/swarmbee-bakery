@@ -66,7 +66,7 @@ def build_payload(*,
     if notes:
         description_parts.append(f"Notes: {notes}")
     description_parts.append(
-        f"Submitted via swarmbee-bakery CLI v0.1.4 at "
+        f"Submitted via swarmbee-bakery CLI v0.1.5 at "
         f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}"
     )
     description = "\n".join(description_parts)

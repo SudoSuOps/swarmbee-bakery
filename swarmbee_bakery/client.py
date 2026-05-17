@@ -13,7 +13,7 @@ import requests
 
 
 DEFAULT_BASE_URL = "https://bakery.swarmandbee.ai"
-USER_AGENT = "swarmbee-bakery-cli/0.1.4"
+USER_AGENT = "swarmbee-bakery-cli/0.1.5"
 DEFAULT_TIMEOUT = 10
 
 

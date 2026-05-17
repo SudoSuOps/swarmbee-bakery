@@ -9,6 +9,6 @@ Public API:
     menu = client.fetch_menu()
     pack = client.fetch_sample("finance")
 """
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Swarm and Bee LLC"
 __url__ = "https://bakery.swarmandbee.ai"
